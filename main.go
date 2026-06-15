@@ -5,9 +5,15 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"url_shortener/store"
 )
 
 func main() {
+	if err := store.Init("url_shortener.db?_pragma=journal_mode(WAL)"); err != nil {
+		log.Fatal(err)
+	}
+	defer store.Close()
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", healthHandler)
@@ -15,6 +21,10 @@ func main() {
 	mux.HandleFunc("GET /demo/greet", greetHandler)
 	mux.HandleFunc("POST /demo/greet", greetPostHandler)
 	mux.HandleFunc("GET /demo/users/{name}", userHandler)
+
+	mux.HandleFunc("POST /api/urls", shortenHandler)
+	mux.HandleFunc("GET /api/urls", listURLsHandler)
+	mux.HandleFunc("GET /{code}", redirectHandler)
 
 	mux.HandleFunc("/", notFoundHandler)
 
@@ -81,6 +91,22 @@ func notFoundHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusNotFound, map[string]any{
 		"error": "Route not found.",
 	})
+}
+
+// --- urls handlers ---
+func shortenHandler(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		URL         string  `json:"url"`
+		CustomAlias *string `json:"custom_alias"`
+		ExpiryDays  *int    `json:"expiry_days"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error": "Invalid JSON.",
+		})
+		return
+	}
 }
 
 // --- helper ---
